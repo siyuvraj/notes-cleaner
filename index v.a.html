@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notes Cleaner</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: auto;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      padding: 15px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .result {
+      margin-top: 25px;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Notes Cleaner</h1>
+
+    <p>Paste messy notes and turn them into an organized list.</p>
+
+    <textarea id="notes" placeholder="Paste your notes here..."></textarea>
+
+    <button onclick="cleanNotes()">Clean My Notes</button>
+    <button onclick="copyResults()">Copy Results</button>
+    <button onclick="clearEverything()">Clear Everything</button>
+           
+        <p id="status"></p>
+
+    <div id="result" class="result"></div>
+  </div>
+
+  <script>
+
+function getEditDistance(word1, word2) {
+  const matrix = [];
+
+  for (let i = 0; i <= word2.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= word1.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= word2.length; i++) {
+    for (let j = 1; j <= word1.length; j++) {
+      if (word2[i - 1] === word1[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+
+  return matrix[word2.length][word1.length];
+}
+
+function isSimilarWord(word, target) {
+  const distance = getEditDistance(word, target);
+
+  if (target.length <= 4) {
+    return distance <= 1;
+  }
+
+  return distance <= 2;
+}
+
+ function correctDeadlineWords(line, deadlineWords) {
+  const originalWords = line.split(/\s+/);
+
+  const correctedWords = originalWords.map(originalWord => {
+    const cleanWord = originalWord
+      .toLowerCase()
+      .replace(/[^a-z]/g, "");
+
+    if (!cleanWord) {
+      return originalWord;
+    }
+
+    let bestMatch = null;
+    let smallestDistance = Infinity;
+
+    deadlineWords.forEach(deadlineWord => {
+      const distance = getEditDistance(cleanWord, deadlineWord);
+
+      if (distance < smallestDistance) {
+        smallestDistance = distance;
+        bestMatch = deadlineWord;
+      }
+    });
+
+    const allowedDistance = bestMatch.length <= 4 ? 1 : 2;
+
+    if (smallestDistance > allowedDistance) {
+      return originalWord;
+    }
+
+    const punctuation =
+      originalWord.match(/[^a-zA-Z]+$/)?.[0] || "";
+
+    return bestMatch + punctuation;
+  });
+
+  return correctedWords.join(" ");
+}
+
+
+  function cleanNotes() {
+    const notes = document.getElementById("notes").value;
+    const resultBox = document.getElementById("result");
+
+    if (!notes.trim()) {
+      resultBox.textContent = "Please enter some notes first.";
+      return;
+    }
+
+    const lines = notes
+      .split("\n")
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    const tasks = [];
+    const deadlines = [];
+    const questions = [];
+    const generalNotes = [];
+  const deadlineWords = [
+  "today",
+  "tomorrow",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday"
+];
+  
+    lines.forEach(line => {
+const lowerLine = line.toLowerCase();
+
+      const words = lowerLine
+  .replace(/[^\w\s]/g, "")
+  .split(/\s+/);
+
+const containsDeadlineWord = words.some(word =>
+  deadlineWords.some(deadlineWord =>
+    isSimilarWord(word, deadlineWord)
+  )
+);
+
+if (line.includes("?")) {
+    questions.push(line);
+  } else if (containsDeadlineWord) {
+  const correctedLine = correctDeadlineWords(line, deadlineWords);
+  deadlines.push(correctedLine);
+  } else if (
+    lowerLine.startsWith("call") ||
+    lowerLine.startsWith("send") ||
+    lowerLine.startsWith("check") ||
+    lowerLine.startsWith("follow up") ||
+    lowerLine.startsWith("email") ||
+    lowerLine.startsWith("book") ||
+    lowerLine.startsWith("create")
+  ) {
+    tasks.push(line);
+  } else {
+    generalNotes.push(line);
+  }
+});
+
+    let output = "";
+
+    if (tasks.length > 0) {
+      output += "TASKS\n";
+      output += tasks.map((item, index) => `${index + 1}. ${item}`).join("\n");
+      output += "\n\n";
+    }
+
+    if (deadlines.length > 0) {
+      output += "DEADLINES\n";
+      output += deadlines.map((item, index) => `${index + 1}. ${item}`).join("\n");
+      output += "\n\n";
+    }
+
+    if (questions.length > 0) {
+      output += "QUESTIONS\n";
+      output += questions.map((item, index) => `${index + 1}. ${item}`).join("\n");
+      output += "\n\n";
+    }
+
+    if (generalNotes.length > 0) {
+      output += "GENERAL NOTES\n";
+      output += generalNotes.map((item, index) => `${index + 1}. ${item}`).join("\n");
+    }
+
+    resultBox.textContent = output.trim();
+  }
+function copyResults() {
+  const result = document.getElementById("result").textContent;
+  const status = document.getElementById("status");
+
+  if (!result.trim()) {
+    status.textContent = "Nothing to copy yet.";
+    return;
+  }
+
+  navigator.clipboard.writeText(result)
+    .then(() => {
+      status.textContent = "Results copied.";
+    })
+    .catch(() => {
+      status.textContent = "Could not copy the results.";
+    });
+}
+function clearEverything() {
+  document.getElementById("notes").value = "";
+  document.getElementById("result").textContent = "";
+  document.getElementById("status").textContent = "";
+}
+
+</script>
+</body>
+</html>
